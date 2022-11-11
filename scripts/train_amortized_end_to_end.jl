@@ -16,6 +16,7 @@ using JLD2
 # Random seed
 Random.seed!(19)
 # Define raw data directory
+mkpath(datadir("training-data"))
 perm_path = datadir("training-data", "perm_gridspacing15.0.mat")
 conc_path = datadir("training-data", "conc_gridspacing15.0.mat")
 grad_path = datadir("training-data", "nrec=960_nsample=1100_nsrc=32_nssample=4_ntrain=1000_nv=5_nvalid=100_snr=10.0_upsample=2.jld2")
