@@ -84,15 +84,21 @@ function loss_supervised(
     grad::Bool = true,
 )
 
-    Zx, Zy, logdet = Net.forward(X, Y)
+    Zx, Zy, lgdet = Net.forward(X, Y)
     if CUDA.functional()
         CUDA.reclaim()
     end
     z_size = size(Zx)
 
-    f = sum(logpdf(0.0f0, 1.0f0, Zx))
-    f = f + sum(logpdf(0.0f0, 1.0f0, Zy))
-    f = f + logdet * z_size[4]
+    f_zx = norm(Zx)^2 / length(Zx)
+    f_zy = norm(Zy)^2 / length(Zy)
+    f_lgdet = -lgdet / prod(size(Zx)[1:3])
+    f_sum = f_zx + f_zy + f_lgdet
+
+    f = (f_zx, f_zy, f_lgdet, f_sum)
+    #f = sum(logpdf(0.0f0, 1.0f0, Zx))
+    #f = f + sum(logpdf(0.0f0, 1.0f0, Zy))
+    #f = f + logdet * z_size[4]
 
     if grad
         ΔZx = -gradlogpdf(0.0f0, 1.0f0, Zx) / z_size[4]
@@ -104,8 +110,10 @@ function loss_supervised(
         end
         GC.gc()
 
-        return -f / z_size[4], ΔX, ΔY
+        #return -f / z_size[4], ΔX, ΔY
+        return f, ΔX, ΔY
     else
-        return -f / z_size[4]
+        #return -f / z_size[4]
+        return f
     end
 end
