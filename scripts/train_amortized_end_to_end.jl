@@ -13,6 +13,9 @@ using Flux
 using MAT
 using JLD2
 using LaTeXStrings
+using LinearAlgebra
+using ImageQualityIndexes 
+using PyPlot
 
 # Random seed
 Random.seed!(19)
@@ -63,7 +66,7 @@ args = parse_input_args(args)
 max_epoch = args["max_epoch"]
 lr = args["lr"]
 lr_step = args["lr_step"]
-batchsize = args["batchsize"]
+batchsize = 10
 n_hidden = args["n_hidden"]
 depth = args["depth"]
 sim_name = args["sim_name"]
@@ -134,7 +137,11 @@ X_plot_train = wavelet_squeeze(X_train[:,:,:,1:1]) |> gpu;
 Y_plot_train = wavelet_squeeze(Y_train[:,:,:,1:1]) |> gpu;
 
 n_post_samples = 128
-T = 2f0 #temperature
+T = 5f-1 #temperature
+
+vmax = maximum(X_train)
+vmin = minimum(X_train)
+
 for epoch = init_epoch:max_epoch
     for (itr, idx) in enumerate(train_loader)
         Base.flush(Base.stdout)
@@ -189,11 +196,11 @@ for epoch = init_epoch:max_epoch
     append!(fval_eval, fval_eval_i)
 
     Zx_plot, Zy_plot, _ = CH.forward(X_plot, Y_plot);
-    X_post = [wavelet_unsqueeze(CH.inverse(randn(Float32, size(Zy_plot))|>gpu/T, Zy_plot)[1] |> cpu)[:,:,1,1] for i = 1:n_post_samples];
+    X_post = [wavelet_unsqueeze(CH.inverse(T * randn(Float32, size(Zy_plot))|>gpu, Zy_plot)[1] |> cpu)[:,:,1,1] for i = 1:n_post_samples];
 	X_post_mean = mean(X_post)
 	X_post_std  = std(X_post)
-    error_mean = abs.(X_post_mean-(X_plot|>cpu)[:,:,1,1])
-	ssim_i = round(assess_ssim(X_post_mean, (X_plot|>cpu)[:,:,1,1]),digits=2)
+    error_mean = abs.(X_post_mean-wavelet_unsqueeze(X_plot|>cpu)[:,:,1,1])
+	ssim_i = round(assess_ssim(X_post_mean, wavelet_unsqueeze(X_plot|>cpu)[:,:,1,1]),digits=2)
 	mse_i = round(norm(error_mean)^2,digits=2)
     append!(ssim_eval, ssim_i)
     append!(msee_eval, mse_i)
@@ -220,13 +227,13 @@ for epoch = init_epoch:max_epoch
 	subplot(2,5,7); imshow(X_post_mean', vmax=vmax,vmin=vmin,  interpolation="none", cmap="gray")
 	axis("off"); title("Posterior mean SSIM="*string(ssim_i)) ; colorbar(fraction=0.046, pad=0.04)
 
-	subplot(2,4,8); imshow(error_mean', interpolation="none", cmap="magma")
+	subplot(2,5,8); imshow(error_mean', interpolation="none", cmap="magma")
 	axis("off");title("Plot: Absolute error | MSE="*string(mse_i)) ; cb = colorbar(fraction=0.046, pad=0.04)
 
-	subplot(2,4,9); imshow(X_post_std',interpolation="none", cmap="magma")
+	subplot(2,5,9); imshow(X_post_std',interpolation="none", cmap="magma")
 	axis("off"); title("Posterior standard deviation") ;cb =colorbar(fraction=0.046, pad=0.04)
 
-    subplot(2,4,10); imshow(wavelet_unsqueeze(Zy_plot |> cpu)[:,:,1,1]',vmax=-3,vmin=3, interpolation="none", cmap="seismic")
+    subplot(2,5,10); imshow(wavelet_unsqueeze(Zy_plot |> cpu)[:,:,1,1]',vmax=-3,vmin=3, interpolation="none", cmap="seismic")
 	axis("off");  colorbar(fraction=0.046, pad=0.04);title("Zx")
 
     tight_layout()
@@ -234,12 +241,14 @@ for epoch = init_epoch:max_epoch
 	
     # training
     Zx_plot_train, Zy_plot_train, _ = CH.forward(X_plot_train, Y_plot_train);
-    X_post_train = [wavelet_unsqueeze(CH.inverse(randn(Float32, size(Zy_plot_train))|>gpu/T, Zy_plot_train)[1] |> cpu)[:,:,1,1] for i = 1:n_post_samples];
+    X_post_train = [wavelet_unsqueeze(CH.inverse(T * randn(Float32, size(Zy_plot_train))|>gpu, Zy_plot_train)[1] |> cpu)[:,:,1,1] for i = 1:n_post_samples];
 	X_post_mean_train = mean(X_post_train)
 	X_post_std_train = std(X_post_train)
-    error_mean_train = abs.(X_post_mean_train-(X_plot_train|>cpu)[:,:,1,1])
-	ssim_i_train = round(assess_ssim(X_post_mean_train, (X_plot_train|>cpu)[:,:,1,1]),digits=2)
+    error_mean_train = abs.(X_post_mean_train-wavelet_unsqueeze(X_plot_train|>cpu)[:,:,1,1])
+	ssim_i_train = round(assess_ssim(X_post_mean_train, wavelet_unsqueeze(X_plot_train|>cpu)[:,:,1,1]),digits=2)
 	mse_i_train = round(norm(error_mean_train)^2,digits=2)
+    append!(ssim, ssim_i_train)
+    append!(msee, mse_i_train)
 
 	fig = figure(figsize=(20, 10)); 
 	subplot(2,5,1); imshow((Y_plot_train|>cpu)[:,:,1,1]', interpolation="none", cmap="gray")
@@ -263,13 +272,13 @@ for epoch = init_epoch:max_epoch
 	subplot(2,5,7); imshow(X_post_mean_train', vmax=vmax,vmin=vmin,  interpolation="none", cmap="gray")
 	axis("off"); title("Posterior mean SSIM="*string(ssim_i)) ; colorbar(fraction=0.046, pad=0.04)
 
-	subplot(2,4,8); imshow(error_mean_train', interpolation="none", cmap="magma")
+	subplot(2,5,8); imshow(error_mean_train', interpolation="none", cmap="magma")
 	axis("off");title("Plot: Absolute error | MSE="*string(mse_i)) ; cb = colorbar(fraction=0.046, pad=0.04)
 
-	subplot(2,4,9); imshow(X_post_std_train',interpolation="none", cmap="magma")
+	subplot(2,5,9); imshow(X_post_std_train',interpolation="none", cmap="magma")
 	axis("off"); title("Posterior standard deviation") ;cb =colorbar(fraction=0.046, pad=0.04)
 
-    subplot(2,4,10); imshow(wavelet_unsqueeze(Zy_plot_train |> cpu)[:,:,1,1]',vmax=-3,vmin=3, interpolation="none", cmap="seismic")
+    subplot(2,5,10); imshow(wavelet_unsqueeze(Zy_plot_train |> cpu)[:,:,1,1]',vmax=-3,vmin=3, interpolation="none", cmap="seismic")
 	axis("off");  colorbar(fraction=0.046, pad=0.04);title("Zx")
 
     tight_layout()
@@ -279,7 +288,7 @@ for epoch = init_epoch:max_epoch
 	############# Training metric logs
 	fig = figure(figsize=(10,12))
 	subplot(6,1,1); title("L2 Term Zx: Train="*string(fzx[end])*" Validation="*string(fzx_eval[end]))
-	plot(num_batches:num_batches:num_batches*epoch, fzx, label="Train");
+	plot(fzx, label="Train");
 	plot(num_batches:num_batches:num_batches*epoch, fzx_eval, label="Validation"); 
 	axhline(y=1,color="red",linestyle="--",label="Normal noise")
 	ylim(top=1.5)
@@ -287,7 +296,7 @@ for epoch = init_epoch:max_epoch
 	xlabel("Parameter Update"); legend();
 
     subplot(6,1,2); title("L2 Term Zy: Train="*string(fzy[end])*" Validation="*string(fzy_eval[end]))
-	plot(num_batches:num_batches:num_batches*epoch, fzy, label="Train");
+	plot(fzy, label="Train");
 	plot(num_batches:num_batches:num_batches*epoch, fzy_eval, label="Validation"); 
 	axhline(y=1,color="red",linestyle="--",label="Normal noise")
 	ylim(top=1.5)
@@ -295,22 +304,22 @@ for epoch = init_epoch:max_epoch
 	xlabel("Parameter Update"); legend();
 
 	subplot(6,1,3); title("Logdet Term: Train="*string(flgdet[end])*" Validation="*string(flgdet_eval[end]))
-	plot(num_batches:num_batches:num_batches*epoch, flgdet);
+	plot(flgdet);
 	plot(num_batches:num_batches:num_batches*epoch, flgdet_eval);
 	xlabel("Parameter Update") ;
 
 	subplot(6,1,4); title("Total Objective: Train="*string(fval[end])*" Validation="*string(fval_eval[end]))
-	plot(num_batches:num_batches:num_batches*epoch, fval);
+	plot(fval);
 	plot(num_batches:num_batches:num_batches*epoch, fval_eval);
 	xlabel("Parameter Update") ;
 
 	subplot(6,1,5); title("Posterior mean SSIM: Train=$(ssim[end]) Validation=$(ssim_eval[end])")
     plot(num_batches:num_batches:num_batches*epoch, ssim);
     plot(num_batches:num_batches:num_batches*epoch, ssim_eval);
-	label("Parameter Update") 
+	xlabel("Parameter Update") 
 
 	subplot(6,1,6); title("Posterior mean MSE: Train=$(msee[end]) Validation=$(msee_eval[end])")
-    plot(num_batches:num_batches:num_batches*epoch, msee);
+    plot(msee);
     plot(num_batches:num_batches:num_batches*epoch, msee_eval);
 	xlabel("Parameter Update") 
 
