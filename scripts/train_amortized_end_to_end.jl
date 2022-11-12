@@ -142,6 +142,8 @@ T = 5f-1 #temperature
 vmax = maximum(X_train)
 vmin = minimum(X_train)
 
+plot_path = plotsdir("amortized")
+
 for epoch = init_epoch:max_epoch
     for (itr, idx) in enumerate(train_loader)
         Base.flush(Base.stdout)
