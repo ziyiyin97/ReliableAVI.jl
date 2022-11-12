@@ -46,7 +46,7 @@ ntrain = n_train
 nsamples = n_train
 n_val = 50
 noise_x = 5f-3
-noise_y = 0f0
+noise_y = 5f-3
 
 # Split in training/validation
 train_idx = randperm(nsamples)[1:ntrain]
