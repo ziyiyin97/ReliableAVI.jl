@@ -45,17 +45,20 @@ n_train = 1000
 ntrain = n_train
 nsamples = n_train
 n_val = 50
-max_val_x = maximum(perm)
+noise_x = 5f-3
+noise_y = 0f0
 
 # Split in training/validation
 train_idx = randperm(nsamples)[1:ntrain]
 val_idx = ntrain+1:ntrain+n_val
 
-X_train = reshape(perm[:,:,1:n_train], size(perm)[1:2]...,1,n_train) ./ max_val_x
-Y_train = reshape(grad[:,:,1:n_train], size(grad)[1:2]...,1,n_train)
+X_train = reshape(perm[:,:,1:n_train], size(perm)[1:2]...,1,n_train) ./ norm(perm, Inf)
+Y_train = reshape(grad[:,:,1:n_train], size(grad)[1:2]...,1,n_train) ./ norm(grad, Inf)
 
-X_val = reshape(perm[:,:,(n_train+1):(n_train+n_val)], size(perm)[1:2]...,1,n_val) ./ max_val_x
-Y_val = reshape(grad[:,:,(n_train+1):(n_train+n_val)], size(grad)[1:2]...,1,n_val)
+X_val = reshape(perm[:,:,(n_train+1):(n_train+n_val)], size(perm)[1:2]...,1,n_val) ./ norm(perm, Inf)
+Y_val = reshape(grad[:,:,(n_train+1):(n_train+n_val)], size(grad)[1:2]...,1,n_val) ./ norm(grad, Inf)
+X_val .+= noise_x * randn(Float32, size(X_val));
+Y_val .+= noise_y * randn(Float32, size(Y_val));
 
 X_val = wavelet_squeeze(X_val) |> gpu
 Y_val = wavelet_squeeze(Y_val) |> gpu
@@ -66,11 +69,12 @@ args = parse_input_args(args)
 max_epoch = args["max_epoch"]
 lr = args["lr"]
 lr_step = args["lr_step"]
-batchsize = 10
+batchsize = 20
 n_hidden = args["n_hidden"]
 depth = args["depth"]
 sim_name = args["sim_name"]
 resume = args["resume"]
+lr_rate = 0.75f0
 
 # Loading the existing weights, if any.
 loaded_keys = resume_from_checkpoint(args, ["Params", "fval", "fval_eval", "opt", "epoch"])
@@ -81,14 +85,6 @@ opt = loaded_keys["opt"]
 init_epoch = loaded_keys["epoch"]
 
 nx, ny, nc, nsamples = size(X_train)
-
-AN_x = ActNorm(nsamples)
-AN_y = ActNorm(nsamples)
-X_train = AN_x.forward(X_train)
-Y_train = AN_y.forward(Y_train)
-
-AN_params_x = get_params(AN_x)
-AN_params_y = get_params(AN_y)
 
 # Dimensions after wavelet squeeze to increase no. of channels
 nx = Int(nx / 2)
@@ -106,12 +102,9 @@ train_loader = Flux.DataLoader(train_idx, batchsize = batchsize, shuffle = true)
 num_batches = length(train_loader)
 
 # Optimizer
-opt == nothing && (
-    opt = Flux.Optimiser(
-        Flux.ExpDecay(lr, 9.0f-1, num_batches * lr_step, 1.0f-6),
-        Flux.ADAM(lr),
-    )
-)
+clipnorm_val = 2.5f0
+opt = Flux.Optimiser(ExpDecay(lr, lr_rate, num_batches * lr_step, 1f-6), ClipNorm(clipnorm_val), ADAM(lr))
+
 
 # Training log keeper
 fval = []
@@ -130,11 +123,17 @@ msee_eval = []
 
 p = Progress(num_batches * (max_epoch - init_epoch + 1))
 
-X_plot = X_val[:,:,:,1:1] |> gpu;
-Y_plot = Y_val[:,:,:,1:1] |> gpu;
+X_plot = X_val[:,:,:,1:1];
+Y_plot = Y_val[:,:,:,1:1];
+X_plot = X_plot |> gpu;
+Y_plot = Y_plot |> gpu;
 
 X_plot_train = wavelet_squeeze(X_train[:,:,:,1:1]) |> gpu;
 Y_plot_train = wavelet_squeeze(Y_train[:,:,:,1:1]) |> gpu;
+X_plot_train .+= noise_x * randn(Float32, size(X_plot_train));
+Y_plot_train .+= noise_y * randn(Float32, size(Y_plot_train));
+X_plot_train = X_plot_train |> gpu;
+Y_plot_train = Y_plot_train |> gpu;
 
 n_post_samples = 128
 T = 5f-1 #temperature
@@ -156,6 +155,9 @@ for epoch = init_epoch:max_epoch
             X = X_train[:, :, :, idx]
             Y = Y_train[:, :, :, idx]
         end
+
+        X .+= noise_x * randn(Float32, size(X))
+        Y .+= noise_y * randn(Float32, size(Y))
 
         # Apply wavelet squeeze.
         X = wavelet_squeeze(X)
@@ -188,7 +190,7 @@ for epoch = init_epoch:max_epoch
 
     #### plotting
 
-    fig_name = @strdict n_train n_val epoch n_hidden batchsize lr lr_step max_epoch n_post_samples T
+    fig_name = @strdict n_train n_val epoch n_hidden batchsize lr lr_step max_epoch n_post_samples T clipnorm_val noise_x noise_y lr_rate
 
     # validation
     fzx_eval_i, fzy_eval_i, flgdet_eval_i, fval_eval_i = loss_supervised(CH, X_val, Y_val; grad = false)
@@ -236,7 +238,7 @@ for epoch = init_epoch:max_epoch
 	axis("off"); title("Posterior standard deviation") ;cb =colorbar(fraction=0.046, pad=0.04)
 
     subplot(2,5,10); imshow(wavelet_unsqueeze(Zy_plot |> cpu)[:,:,1,1]',vmax=-3,vmin=3, interpolation="none", cmap="seismic")
-	axis("off");  colorbar(fraction=0.046, pad=0.04);title("Zx")
+	axis("off");  colorbar(fraction=0.046, pad=0.04);title("Zy")
 
     tight_layout()
 	safesave(joinpath(plot_path, savename(fig_name; digits=6)*"_nf_sol_val.png"), fig); close(fig)
@@ -281,7 +283,7 @@ for epoch = init_epoch:max_epoch
 	axis("off"); title("Posterior standard deviation") ;cb =colorbar(fraction=0.046, pad=0.04)
 
     subplot(2,5,10); imshow(wavelet_unsqueeze(Zy_plot_train |> cpu)[:,:,1,1]',vmax=-3,vmin=3, interpolation="none", cmap="seismic")
-	axis("off");  colorbar(fraction=0.046, pad=0.04);title("Zx")
+	axis("off");  colorbar(fraction=0.046, pad=0.04);title("Zy")
 
     tight_layout()
 
@@ -321,7 +323,7 @@ for epoch = init_epoch:max_epoch
 	xlabel("Parameter Update") 
 
 	subplot(6,1,6); title("Posterior mean MSE: Train=$(msee[end]) Validation=$(msee_eval[end])")
-    plot(msee);
+    plot(num_batches:num_batches:num_batches*epoch, msee);
     plot(num_batches:num_batches:num_batches*epoch, msee_eval);
 	xlabel("Parameter Update") 
 
@@ -331,7 +333,7 @@ for epoch = init_epoch:max_epoch
     # Saving parameters and logs
     Params = get_params(CH) |> cpu
     save_dict =
-        @strdict epoch max_epoch lr lr_step batchsize n_hidden depth sim_name Params fval fval_eval train_idx AN_params_x AN_params_y opt n_post_samples T n_train n_val fval fzx fzy flgdet ssim msee fval_eval fzx_eval fzy_eval flgdet_eval ssim_eval msee_eval
+        @strdict epoch max_epoch lr lr_step clipnorm_val noise_x noise_y lr_rate batchsize n_hidden depth sim_name Params fval fval_eval train_idx opt n_post_samples T n_train n_val fval fzx fzy flgdet ssim msee fval_eval fzx_eval fzy_eval flgdet_eval ssim_eval msee_eval
         
     @tagsave(
         datadir(sim_name, savename(save_dict, "jld2"; digits = 6)),
