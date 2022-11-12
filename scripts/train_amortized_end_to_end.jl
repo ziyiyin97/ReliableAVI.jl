@@ -208,7 +208,7 @@ for epoch = init_epoch:max_epoch
     append!(msee_eval, mse_i)
 
 	fig = figure(figsize=(20, 10)); 
-	subplot(2,5,1); imshow((Y_plot|>cpu)[:,:,1,1]', interpolation="none", cmap="gray")
+	subplot(2,5,1); imshow(wavelet_unsqueeze(Y_plot|>cpu)[:,:,1,1]', interpolation="none", cmap="gray")
 	axis("off");  colorbar(fraction=0.046, pad=0.04);title(L"$\hat \mathbf{y}$  (gradient)")
 
 	subplot(2,5,2); imshow(X_post[1]',vmax=vmax,vmin=vmin, interpolation="none", cmap="gray")
@@ -223,7 +223,7 @@ for epoch = init_epoch:max_epoch
     subplot(2,5,5); imshow(wavelet_unsqueeze(Zx_plot |> cpu)[:,:,1,1]',vmax=-3,vmin=3, interpolation="none", cmap="seismic")
 	axis("off");  colorbar(fraction=0.046, pad=0.04);title("Zx")
 
-	subplot(2,5,6); imshow((X_plot|>cpu)[:,:,1,1]', vmax=vmax,vmin=vmin, interpolation="none", cmap="gray")
+	subplot(2,5,6); imshow(wavelet_unsqueeze(X_plot|>cpu)[:,:,1,1]', vmax=vmax,vmin=vmin, interpolation="none", cmap="gray")
 	axis("off"); title(L"$\mathbf{x_{gt}}$") ; colorbar(fraction=0.046, pad=0.04)
 
 	subplot(2,5,7); imshow(X_post_mean', vmax=vmax,vmin=vmin,  interpolation="none", cmap="gray")
@@ -253,7 +253,7 @@ for epoch = init_epoch:max_epoch
     append!(msee, mse_i_train)
 
 	fig = figure(figsize=(20, 10)); 
-	subplot(2,5,1); imshow((Y_plot_train|>cpu)[:,:,1,1]', interpolation="none", cmap="gray")
+	subplot(2,5,1); imshow(wavelet_unsqueeze(Y_plot_train|>cpu)[:,:,1,1]', interpolation="none", cmap="gray")
 	axis("off");  colorbar(fraction=0.046, pad=0.04);title(L"$\hat \mathbf{y}$  (gradient)")
 
 	subplot(2,5,2); imshow(X_post_train[1]',vmax=vmax,vmin=vmin, interpolation="none", cmap="gray")
@@ -268,7 +268,7 @@ for epoch = init_epoch:max_epoch
     subplot(2,5,5); imshow(wavelet_unsqueeze(Zx_plot_train |> cpu)[:,:,1,1]',vmax=-3,vmin=3, interpolation="none", cmap="seismic")
 	axis("off");  colorbar(fraction=0.046, pad=0.04);title("Zx")
 
-	subplot(2,5,6); imshow((X_plot_train|>cpu)[:,:,1,1]', vmax=vmax,vmin=vmin, interpolation="none", cmap="gray")
+	subplot(2,5,6); imshow(wavelet_unsqueeze(X_plot_train|>cpu)[:,:,1,1]', vmax=vmax,vmin=vmin, interpolation="none", cmap="gray")
 	axis("off"); title(L"$\mathbf{x_{gt}}$") ; colorbar(fraction=0.046, pad=0.04)
 
 	subplot(2,5,7); imshow(X_post_mean_train', vmax=vmax,vmin=vmin,  interpolation="none", cmap="gray")
