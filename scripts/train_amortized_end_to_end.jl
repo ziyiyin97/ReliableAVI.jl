@@ -128,8 +128,8 @@ Y_plot = Y_val[:,:,:,1:1];
 X_plot = X_plot |> gpu;
 Y_plot = Y_plot |> gpu;
 
-X_plot_train = wavelet_squeeze(X_train[:,:,:,1:1]) |> gpu;
-Y_plot_train = wavelet_squeeze(Y_train[:,:,:,1:1]) |> gpu;
+X_plot_train = wavelet_squeeze(X_train[:,:,:,1:1]);
+Y_plot_train = wavelet_squeeze(Y_train[:,:,:,1:1]);
 X_plot_train .+= noise_x * randn(Float32, size(X_plot_train));
 Y_plot_train .+= noise_y * randn(Float32, size(Y_plot_train));
 X_plot_train = X_plot_train |> gpu;
